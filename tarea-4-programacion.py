@@ -128,4 +128,50 @@ def generar_siguiente_id(lista_entidades) -> int:
     # Busca el valor máximo de ID en los objetos existentes y le suma 1
     return max(e.obtener_identificador() for e in lista_entidades) + 1
 
+import re # Importa el módulo re para usar expresiones regulares y validar datos como correo y teléfono.
+
+
+class Cliente(EntidadBase):
+    """Cliente con datos privados y propiedades de solo lectura."""
+
+    def __init__(self, nombre: str, correo: str, telefono: str) -> None:
+        super().__init__()  # Llama al constructor de la clase base "Entidad"
+
+        # Verifica que el nombre sea un texto.
+        # También elimina espacios al inicio y al final con strip()
+        # y comprueba que tenga al menos 2 caracteres.
+        if not isinstance(nombre, str) or len(nombre.strip()) < 2:
+            raise DatosInvalidosError("El nombre debe contener al menos dos caracteres.")
+
+        # Verifica que el correo sea un texto.
+        # Luego valida que tenga un formato válido, por ejemplo:
+        # usuario@dominio.com
+        if not isinstance(correo, str) or not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", correo.strip()):
+            raise DatosInvalidosError("El correo no es válido.")
+
+        # Verifica que el teléfono sea un texto.
+        # Luego valida que tenga un formato válido, por ejemplo:
+        # +1234567890
+        if not isinstance(telefono, str) or not re.fullmatch(r"\+?[0-9][0-9 ()-]{6,19}", telefono.strip()):
+            raise DatosInvalidosError("El teléfono no es válido.")
+
+    @property
+    def nombre(self) -> str:
+        # Permite leer el nombre del cliente sin permitir modificarlo directamente.
+        return self.__nombre
+
+    @property
+    def correo(self) -> str:
+        # Permite leer el correo del cliente de forma segura y solo lectura.
+        return self.__correo
+
+    @property
+    def telefono(self) -> str:
+        # Permite leer el teléfono del cliente sin cambiarlo desde fuera.
+        return self.__telefono
+
+    def descripcion(self) -> str:
+        # Genera una descripción del cliente con su nombre, correo y teléfono.
+        return f"Cliente: {self.nombre} ({self.correo}), teléfono: {self.telefono}"
+
 
