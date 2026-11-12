@@ -175,3 +175,171 @@ class Cliente(EntidadBase):
         return f"Cliente: {self.nombre} ({self.correo}), teléfono: {self.telefono}"
 
 
+# GESTIÓN DE SERVICIOS: CLASE ABSTRACTA
+
+class Servicio(EntidadBase):
+    """
+    Clase abstracta que define la estructura base para cualquier servicio ofrecido por Software FJ.
+    Hereda de EntidadBase para garantizar un ID único.
+    """
+    def __init__(self, id_entidad: int, nombre: str, costo_base: float, disponible: bool = True):
+        super().__init__(id_entidad) # Llamada al constructor de la clase padre
+        
+        # Validaciones estrictas requeridas en la rúbrica
+        if not isinstance(nombre, str) or len(nombre.strip()) < 3:
+            raise DatosInvalidosError("El nombre del servicio debe tener al menos 3 caracteres.")
+        if not isinstance(costo_base, (int, float)) or costo_base < 0:
+            raise DatosInvalidosError("El costo base no puede ser negativo.")
+            
+        self._nombre = nombre.strip()
+        self._costo_base = float(costo_base)
+        self._disponible = disponible
+
+    # Cumplimiento del método abstracto heredado de EntidadBase
+    def obtener_identificador(self) -> int:
+        return self._id_entidad
+
+    @property
+    def nombre(self):
+        return self._nombre
+
+    @property
+    def disponible(self):
+        return self._disponible
+
+    def cambiar_disponibilidad(self, estado: bool):
+        self._disponible = estado
+
+    
+    # MÉTODOS ABSTRACTOS (Para forzar polimorfismo)
+   
+    @abstractmethod
+    def calcular_costo(self, impuesto: float = None, descuento: float = None) -> float:
+        """ Método abstracto que sobrecargarán las clases hijas. """
+        pass
+
+    @abstractmethod
+    def descripcion(self) -> str:
+        pass
+
+# CLASES HIJAS: HERENCIA, POLIMORFISMO Y SOBRECARGA
+
+class ReservaSala(Servicio):
+    """ Servicio 1: Reserva de salas físicas. """
+    def __init__(self, id_entidad: int, nombre: str, costo_base: float, capacidad: int):
+        super().__init__(id_entidad, nombre, costo_base)
+        if capacidad <= 0:
+            raise DatosInvalidosError("La capacidad de la sala debe ser mayor a 0.")
+        self.__capacidad = capacidad
+
+    # Polimorfismo y Sobrecarga mediante parámetros opcionales
+    def calcular_costo(self, impuesto: float = None, descuento: float = None) -> float:
+        registrar_log(f"Iniciando cálculo de costo para Sala '{self.nombre}'", "INFO")
+        
+        # Bloque robusto de excepciones (try/except/else/finally)
+        try:
+            if not self.disponible:
+                raise ServicioNoDisponibleError(f"La sala '{self.nombre}' no se encuentra disponible para reserva.")
+            
+            costo_total = self._costo_base
+            
+            # Lógica polimórfica: Las salas de más de 20 personas tienen un recargo del 10%
+            if self.__capacidad > 20:
+                costo_total *= 1.10
+
+            # Aplicación de parámetros opcionales (Sobrecarga simulada)
+            if descuento is not None:
+                if descuento < 0 or descuento > 100:
+                    raise DatosInvalidosError("El porcentaje de descuento es inválido.")
+                costo_total -= costo_total * (descuento / 100)
+
+            if impuesto is not None:
+                if impuesto < 0:
+                    raise DatosInvalidosError("El impuesto no puede ser negativo.")
+                costo_total += costo_total * (impuesto / 100)
+
+        except Exception as e:
+            registrar_log(f"Error en cálculo de costo (Sala): {e}", "ERROR")
+            raise # Encadenamiento: re-lanza el error para que la aplicación principal lo sepa
+        else:
+            # Se ejecuta solo si no hubo errores en el try
+            registrar_log(f"Cálculo exitoso para Sala '{self.nombre}'. Total: {costo_total}", "INFO")
+            return round(costo_total, 2)
+        finally:
+            # Se ejecuta siempre, haya error o no
+            registrar_log(f"Finaliza operación de costeo para ID {self._id_entidad}", "SYSTEM")
+
+    def descripcion(self) -> str:
+        return f"[Sala] {self.nombre} - Capacidad: {self.__capacidad} personas."
+
+
+class AlquilerEquipo(Servicio):
+    """ Servicio 2: Alquiler de equipos tecnológicos. """
+    def __init__(self, id_entidad: int, nombre: str, costo_base: float, requiere_deposito: bool):
+        super().__init__(id_entidad, nombre, costo_base)
+        self.__requiere_deposito = requiere_deposito
+
+    # Polimorfismo: El cálculo es distinto al de las salas
+    def calcular_costo(self, impuesto: float = None, descuento: float = None) -> float:
+        registrar_log(f"Iniciando cálculo de costo para Equipo '{self.nombre}'", "INFO")
+        try:
+            if not self.disponible:
+                raise ServicioNoDisponibleError(f"El equipo '{self.nombre}' está averiado o en uso.")
+            
+            costo_total = self._costo_base
+            
+            # Lógica polimórfica: Si requiere depósito, se suma un cargo fijo de 50.0 al costo base
+            if self.__requiere_deposito:
+                costo_total += 50.0
+
+            if descuento is not None:
+                costo_total -= costo_total * (descuento / 100)
+            if impuesto is not None:
+                costo_total += costo_total * (impuesto / 100)
+
+        except Exception as e:
+            registrar_log(f"Error en cálculo de costo (Equipo): {e}", "ERROR")
+            raise
+        else:
+            return round(costo_total, 2)
+        finally:
+            registrar_log(f"Finaliza operación de costeo para ID {self._id_entidad}", "SYSTEM")
+
+    def descripcion(self) -> str:
+        deposito = "Sí" if self.__requiere_deposito else "No"
+        return f"[Equipo] {self.nombre} - Requiere depósito: {deposito}."
+
+
+class AsesoriaEspecializada(Servicio):
+    """ Servicio 3: Asesorías con profesionales. """
+    def __init__(self, id_entidad: int, nombre: str, costo_base: float, horas_estimadas: int):
+        super().__init__(id_entidad, nombre, costo_base)
+        if horas_estimadas <= 0:
+            raise DatosInvalidosError("Las horas estimadas deben ser mínimo 1.")
+        self.__horas_estimadas = horas_estimadas
+
+    # Polimorfismo: El cálculo se multiplica por las horas
+    def calcular_costo(self, impuesto: float = None, descuento: float = None) -> float:
+        registrar_log(f"Iniciando cálculo de costo para Asesoría '{self.nombre}'", "INFO")
+        try:
+            if not self.disponible:
+                raise ServicioNoDisponibleError(f"El asesor para '{self.nombre}' no tiene agenda disponible.")
+            
+            # Lógica polimórfica: El costo base es por hora
+            costo_total = self._costo_base * self.__horas_estimadas
+
+            if descuento is not None:
+                costo_total -= costo_total * (descuento / 100)
+            if impuesto is not None:
+                costo_total += costo_total * (impuesto / 100)
+
+        except Exception as e:
+            registrar_log(f"Error en cálculo de costo (Asesoría): {e}", "ERROR")
+            raise
+        else:
+            return round(costo_total, 2)
+        finally:
+            registrar_log(f"Finaliza operación de costeo para ID {self._id_entidad}", "SYSTEM")
+
+    def descripcion(self) -> str:
+        return f"[Asesoría] {self.nombre} - Duración: {self.__horas_estimadas} horas."
