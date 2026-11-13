@@ -339,6 +339,251 @@ class AsesoriaEspecializada(Servicio):
         else:
             return round(costo_total, 2)
         finally:
+            
+# GESTIÓN DE RESERVAS
+
+class Reserva(EntidadBase):
+    """
+    Clase que gestiona las reservas del sistema Software FJ.
+    Integra un cliente, un servicio, la duración y el estado de la reserva,
+    implementando confirmación, cancelación y procesamiento.
+    """
+
+    def __init__(self, id_entidad: int, cliente: Cliente, servicio: Servicio, duracion: int = 1) -> None:
+        super().__init__(id_entidad)
+
+        # Validaciones de negocio
+        if not isinstance(cliente, Cliente):
+            raise DatosInvalidosError(
+                "El cliente asociado a la reserva no es válido."
+            )
+
+        if not isinstance(servicio, Servicio):
+            raise DatosInvalidosError(
+                "El servicio asociado a la reserva no es válido."
+            )
+
+        if isinstance(duracion, bool) or not isinstance(duracion, int) or duracion <= 0:
+            raise DatosInvalidosError(
+                "La duración de la reserva debe ser un número entero mayor a 0."
+            )
+
+        self.__cliente = cliente
+        self.__servicio = servicio
+        self.__duracion = duracion
+        self.__estado = "Pendiente"
+
+        registrar_log(
+            f"Reserva creada con ID {self._id_entidad} para el cliente "
+            f"'{cliente.nombre}' con servicio '{servicio.nombre}'. "
+            f"Estado inicial: Pendiente",
+            "INFO"
+        )
+
+    # Implementación del método abstracto heredado de EntidadBase
+    def obtener_identificador(self) -> int:
+        return self._id_entidad
+
+    # Propiedades de solo lectura
+    @property
+    def cliente(self) -> Cliente:
+        return self.__cliente
+
+    @property
+    def servicio(self) -> Servicio:
+        return self.__servicio
+
+    @property
+    def duracion(self) -> int:
+        return self.__duracion
+
+    @property
+    def estado(self) -> str:
+        return self.__estado
+
+    # CONFIRMACIÓN DE RESERVA
+    def confirmar(self) -> None:
+        """
+        Confirma la reserva únicamente si está pendiente
+        y el servicio se encuentra disponible.
+        """
+        registrar_log(
+            f"Intentando confirmar la reserva ID {self._id_entidad}",
+            "INFO"
+        )
+
+        try:
+            if self.__estado != "Pendiente":
+                raise ReservaError(
+                    f"No se puede confirmar la reserva ID {self._id_entidad} "
+                    f"porque su estado actual es '{self.__estado}'."
+                )
+
+            if not self.__servicio.disponible:
+                raise ServicioNoDisponibleError(
+                    f"El servicio '{self.__servicio.nombre}' "
+                    "no está disponible actualmente."
+                )
+
+            self.__estado = "Confirmada"
+
+        except Exception as e:
+            registrar_log(
+                f"Error al confirmar la reserva ID {self._id_entidad}: {e}",
+                "ERROR"
+            )
+            raise
+
+        else:
+            registrar_log(
+                f"Reserva ID {self._id_entidad} confirmada exitosamente.",
+                "INFO"
+            )
+
+        finally:
+            registrar_log(
+                f"Finaliza proceso de confirmación para reserva ID "
+                f"{self._id_entidad}",
+                "SYSTEM"
+            )
+
+    # CANCELACIÓN DE RESERVA
+    def cancelar(self) -> None:
+        """
+        Cancela la reserva siempre que no haya sido procesada
+        ni se encuentre cancelada previamente.
+        """
+        registrar_log(
+            f"Intentando cancelar la reserva ID {self._id_entidad}",
+            "INFO"
+        )
+
+        try:
+            if self.__estado == "Cancelada":
+                raise ReservaError(
+                    f"La reserva ID {self._id_entidad} "
+                    "ya se encuentra cancelada."
+                )
+
+            if self.__estado == "Procesada":
+                raise ReservaError(
+                    f"No se puede cancelar la reserva ID {self._id_entidad} "
+                    "porque ya fue procesada."
+                )
+
+            self.__estado = "Cancelada"
+
+        except Exception as e:
+            registrar_log(
+                f"Error al cancelar la reserva ID {self._id_entidad}: {e}",
+                "ERROR"
+            )
+            raise
+
+        else:
+            registrar_log(
+                f"Reserva ID {self._id_entidad} cancelada exitosamente.",
+                "INFO"
+            )
+
+        finally:
+            registrar_log(
+                f"Finaliza proceso de cancelación para reserva ID "
+                f"{self._id_entidad}",
+                "SYSTEM"
+            )
+
+    # PROCESAMIENTO DE RESERVA
+    def procesar(self, impuesto: float = None, descuento: float = None) -> float:
+        """
+        Procesa la reserva, calcula el costo total mediante
+        el método polimórfico del servicio y actualiza su estado.
+        """
+
+        registrar_log(
+            f"Intentando procesar la reserva ID {self._id_entidad}",
+            "INFO"
+        )
+
+        try:
+            if self.__estado == "Cancelada":
+                raise ReservaError(
+                    f"No se puede procesar la reserva ID {self._id_entidad} "
+                    "porque está cancelada."
+                )
+
+            if self.__estado == "Procesada":
+                raise ReservaError(
+                    f"La reserva ID {self._id_entidad} "
+                    "ya fue procesada anteriormente."
+                )
+
+            if self.__estado != "Confirmada":
+                raise ReservaError(
+                    f"La reserva ID {self._id_entidad} debe estar confirmada "
+                    f"antes de ser procesada. Estado actual: {self.__estado}."
+                )
+
+            # Validación de impuesto
+            if impuesto is not None:
+                if isinstance(impuesto, bool) or not isinstance(impuesto, (int, float)) or impuesto < 0:
+                    raise DatosInvalidosError(
+                        "El impuesto debe ser un número mayor o igual a 0."
+                    )
+
+            # Validación de descuento
+            if descuento is not None:
+                if isinstance(descuento, bool) or not isinstance(descuento, (int, float)) or not 0 <= descuento <= 100:
+                    raise DatosInvalidosError(
+                        "El descuento debe estar entre 0 y 100."
+                    )
+
+            # Cálculo polimórfico del costo del servicio
+            costo_parcial = self.__servicio.calcular_costo(
+                impuesto=impuesto,
+                descuento=descuento
+            )
+
+            # Multiplicación según la duración de la reserva
+            costo_total = costo_parcial * self.__duracion
+
+            self.__estado = "Procesada"
+
+        except Exception as e:
+            registrar_log(
+                f"Error al procesar la reserva ID {self._id_entidad}: {e}",
+                "ERROR"
+            )
+            raise
+
+        else:
+            registrar_log(
+                f"Reserva ID {self._id_entidad} procesada con éxito. "
+                f"Costo total: {costo_total}",
+                "INFO"
+            )
+
+            return round(costo_total, 2)
+
+        finally:
+            registrar_log(
+                f"Finaliza proceso de procesamiento para reserva ID "
+                f"{self._id_entidad}",
+                "SYSTEM"
+            )
+
+    # DESCRIPCIÓN DE RESERVA
+    def descripcion(self) -> str:
+        """
+        Retorna una descripción detallada de la reserva.
+        """
+        return (
+            f"[Reserva ID: {self._id_entidad}] "
+            f"Cliente: {self.__cliente.nombre} | "
+            f"Servicio: {self.__servicio.nombre} | "
+            f"Duración: {self.__duracion} unidad(es) | "
+            f"Estado: {self.__estado}"
+        )
             registrar_log(f"Finaliza operación de costeo para ID {self._id_entidad}", "SYSTEM")
 
     def descripcion(self) -> str:
