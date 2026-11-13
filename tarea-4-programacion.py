@@ -339,6 +339,10 @@ class AsesoriaEspecializada(Servicio):
         else:
             return round(costo_total, 2)
         finally:
+              registrar_log(f"Finaliza operación de costeo para ID {self._id_entidad}", "SYSTEM")
+
+    def descripcion(self) -> str:
+        return f"[Asesoría] {self.nombre} - Duración: {self.__horas_estimadas} horas."
             
 # GESTIÓN DE RESERVAS
 
@@ -584,7 +588,3 @@ class Reserva(EntidadBase):
             f"Duración: {self.__duracion} unidad(es) | "
             f"Estado: {self.__estado}"
         )
-            registrar_log(f"Finaliza operación de costeo para ID {self._id_entidad}", "SYSTEM")
-
-    def descripcion(self) -> str:
-        return f"[Asesoría] {self.nombre} - Duración: {self.__horas_estimadas} horas."
